@@ -1,7 +1,7 @@
 angular
   .module('fireideaz')
-  .controller('MainCtrl', ['$firebaseArray', '$scope', '$filter', '$window', 'Utils', 'Auth', '$rootScope',
-    function($firebaseArray, $scope, $filter, $window, utils, auth, $rootScope) {
+  .controller('MainCtrl', ['$scope', '$filter', '$window', 'Utils', 'Auth', '$rootScope', 'FirebaseService',
+    function($scope, $filter, $window, utils, auth, $rootScope, firebaseService) {
       $scope.loading = true;
       $scope.messageTypes = utils.messageTypes;
       $scope.utils = utils;
@@ -12,8 +12,8 @@ angular
       function getBoardAndMessages(userData) {
         $scope.userId = $window.location.hash.substring(1) || '499sm';
 
-        var messagesRef = new Firebase("https://blinding-torch-6662.firebaseio.com/messages/" + $scope.userId);
-        var board = new Firebase("https://blinding-torch-6662.firebaseio.com/boards/" + $scope.userId);
+        var messagesRef = firebaseService.getMessagesRef($scope.userId);
+        var board = firebaseService.getBoardRef($scope.userId);
 
         board.on("value", function(board) {
           $scope.board = board.val();
@@ -21,15 +21,14 @@ angular
           $scope.boardContext = $rootScope.boardContext = board.val().boardContext;
         });
 
-
         $scope.boardRef = board;
         $scope.userUid = userData.uid;
-        $scope.messages = $firebaseArray(messagesRef);
+        $scope.messages = firebaseService.newFirebaseArray(messagesRef);
         $scope.loading = false;
       }
 
       if($scope.userId !== '') {
-        var messagesRef = new Firebase("https://blinding-torch-6662.firebaseio.com/messages/" + $scope.userId);
+        var messagesRef = firebaseService.getMessagesRef($scope.userId);
         auth.logUser($scope.userId, getBoardAndMessages);
       } else {
         $scope.loading = false;
@@ -56,8 +55,8 @@ angular
         var drag = $('#' + dragEl);
         var drop = $('#' + dropEl);
 
-        var dropMessageRef = new Firebase("https://blinding-torch-6662.firebaseio.com/messages/" + $scope.userId + '/' + drop.attr('messageId'));
-        var dragMessageRef = new Firebase("https://blinding-torch-6662.firebaseio.com/messages/" + $scope.userId + '/' + drag.attr('messageId'));
+        var dropMessageRef = firebaseService.getMessageRef($scope.userId, drop.attr('messageId'));
+        var dragMessageRef = firebaseService.getMessageRef($scope.userId, drag.attr('messageId'));
 
         dropMessageRef.once('value', function(dropMessage) {
           dragMessageRef.once('value', function(dragMessage) {
@@ -69,18 +68,14 @@ angular
             utils.closeAll();
           });
         });
-      }
+      };
 
       $scope.boardNameChanged = function() {
         $scope.newBoard.name = $scope.newBoard.name.replace(/\s+/g,'');
       };
 
       $scope.getSortOrder = function() {
-        if($scope.sortField === 'votes') {
-          return true;
-        } else {
-          return false;
-        }
+        return $scope.sortField === 'votes' ? true : false;
       };
 
       $scope.createNewBoard = function() {
@@ -90,7 +85,7 @@ angular
         $scope.userId = newUser;
 
         var callback = function(userData) {
-          var board = new Firebase("https://blinding-torch-6662.firebaseio.com/boards/" + $scope.userId);
+          var board = firebaseService.getBoardRef($scope.userId);
           board.set({
             boardId: $scope.newBoard.name,
             date_created: new Date().toString(),
@@ -114,10 +109,10 @@ angular
 
       $scope.toggleVote = function(key, votes) {
         if(!localStorage.getItem(key)) {
-          messagesRef.child(key).update({ votes: votes + 1, date: Firebase.ServerValue.TIMESTAMP });
+          messagesRef.child(key).update({ votes: votes + 1, date: firebaseService.getServerTimestamp() });
           localStorage.setItem(key, 1);
        } else {
-         messagesRef.child(key).update({ votes: votes - 1, date: Firebase.ServerValue.TIMESTAMP });
+         messagesRef.child(key).update({ votes: votes - 1, date: firebaseService.getServerTimestamp() });
          localStorage.removeItem(key);
        }
       };
@@ -128,7 +123,7 @@ angular
           id: utils.getNextId($scope.board)
         };
 
-        var boardColumns = new Firebase("https://blinding-torch-6662.firebaseio.com/boards/" + $scope.userId + '/columns');
+        var boardColumns = firebaseService.getBoardColumns($scope.userId);
         boardColumns.set(utils.toObject($scope.board.columns));
 
         utils.closeAll();
@@ -140,7 +135,7 @@ angular
           id: id
         };
 
-        var boardColumns = new Firebase("https://blinding-torch-6662.firebaseio.com/boards/" + $scope.userId + '/columns');
+        var boardColumns = firebaseService.getBoardColumns($scope.userId);
         boardColumns.set(utils.toObject($scope.board.columns));
 
         utils.closeAll();
@@ -148,7 +143,7 @@ angular
 
       $scope.deleteLastColumn = function() {
           $scope.board.columns.pop();
-          var boardColumns = new Firebase("https://blinding-torch-6662.firebaseio.com/boards/" + $scope.userId + '/columns');
+          var boardColumns = firebaseService.getBoardColumns($scope.userId);
           boardColumns.set(utils.toObject($scope.board.columns));
           utils.closeAll();
       };
@@ -169,7 +164,7 @@ angular
           text: '',
           user_id: $scope.userUid,
           type: { id: type.id },
-          date: Firebase.ServerValue.TIMESTAMP,
+          date: firebaseService.getServerTimestamp(),
           votes: 0
         }).then(addMessageCallback);
       };
